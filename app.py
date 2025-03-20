@@ -49,7 +49,7 @@ with col1:
                 img_byte_arr = img_byte_arr.getvalue()
                 
                 # 显示图片
-                st.image(img_byte_arr, caption="化学结构", use_column_width=True)
+                st.image(img_byte_arr, caption="化学结构", use_container_width=True)
                 
                 # 添加下载按钮
                 st.download_button(
