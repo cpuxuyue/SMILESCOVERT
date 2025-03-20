@@ -1,6 +1,24 @@
 import streamlit as st
-from rdkit import Chem
-from rdkit.Chem import Draw
+import subprocess
+import sys
+
+# 检查是否已安装rdkit
+try:
+    from rdkit import Chem
+    from rdkit.Chem import Draw
+except ImportError:
+    st.error("""
+    RDKit 未安装。请按照以下步骤安装：
+    
+    1. 在终端中运行：
+    ```bash
+    conda install -c conda-forge rdkit
+    ```
+    
+    2. 安装完成后重新运行应用。
+    """)
+    st.stop()
+
 from PIL import Image
 import io
 
