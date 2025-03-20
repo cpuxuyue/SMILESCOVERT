@@ -5,6 +5,9 @@ import pandas as pd
 import os
 import base64
 import re
+from openpyxl import Workbook
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.utils import get_column_letter
 
 # 检查是否已安装rdkit
 try:
@@ -45,6 +48,59 @@ def find_smiles_column(df):
             if valid_count > len(df) * 0.5:  # 如果超过50%的值是有效的SMILES
                 return column
     return None
+
+def save_to_excel(df, smiles_column, output_path):
+    """将数据保存到Excel文件，包含结构图片"""
+    wb = Workbook()
+    ws = wb.active
+    
+    # 写入列标题
+    for col, header in enumerate(df.columns, 1):
+        ws.cell(row=1, column=col, value=header)
+    
+    # 创建临时目录存储图片
+    if not os.path.exists('temp_images'):
+        os.makedirs('temp_images')
+    
+    # 处理每一行数据
+    for row_idx, row in df.iterrows():
+        excel_row = row_idx + 2  # Excel行号从1开始，标题占第1行
+        
+        # 写入数据
+        for col_idx, value in enumerate(row, 1):
+            ws.cell(row=excel_row, column=col_idx, value=value)
+        
+        # 处理SMILES并添加图片
+        smiles = str(row[smiles_column])
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is not None:
+                # 生成分子图片
+                img = Draw.MolToImage(mol, size=(400, 400))
+                img_path = f'temp_images/molecule_{row_idx}.png'
+                img.save(img_path)
+                
+                # 将图片添加到Excel
+                img = XLImage(img_path)
+                # 调整图片大小
+                img.width = 200
+                img.height = 200
+                # 在SMILES列后面添加图片
+                ws.add_image(img, f'{get_column_letter(len(df.columns) + 1)}{excel_row}')
+        except Exception as e:
+            st.warning(f"处理第 {row_idx + 1} 行的SMILES时出错: {str(e)}")
+    
+    # 调整列宽
+    for col in range(1, len(df.columns) + 2):  # +2是因为多了一列图片
+        ws.column_dimensions[get_column_letter(col)].width = 15
+    
+    # 保存Excel文件
+    wb.save(output_path)
+    
+    # 清理临时文件
+    for file in os.listdir('temp_images'):
+        os.remove(os.path.join('temp_images', file))
+    os.rmdir('temp_images')
 
 st.set_page_config(page_title="SMILES 结构查看器", layout="wide")
 
@@ -108,7 +164,7 @@ with tab2:
     1. 上传包含 SMILES 列的 CSV 文件
     2. 系统会自动识别包含 SMILES 的列
     3. 系统会自动生成并显示所有结构的图片
-    4. 可以下载单个结构图片
+    4. 可以下载单个结构图片或导出到Excel
     """)
     
     uploaded_file = st.file_uploader("上传 CSV 文件", type=['csv'])
@@ -195,6 +251,27 @@ with tab2:
                         st.write("以下 SMILES 处理失败：")
                         for smiles in error_smiles:
                             st.code(smiles)
+                
+                # 添加导出到Excel的功能
+                if st.button("导出到Excel"):
+                    try:
+                        # 创建临时Excel文件
+                        excel_path = "molecules_with_structures.xlsx"
+                        save_to_excel(df, smiles_column, excel_path)
+                        
+                        # 读取Excel文件并创建下载按钮
+                        with open(excel_path, 'rb') as f:
+                            st.download_button(
+                                label="下载Excel文件",
+                                data=f,
+                                file_name="molecules_with_structures.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
+                        
+                        # 删除临时文件
+                        os.remove(excel_path)
+                    except Exception as e:
+                        st.error(f"导出Excel时出错: {str(e)}")
                 
         except Exception as e:
             st.error(f"处理CSV文件时出错: {str(e)}") 
