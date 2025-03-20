@@ -187,8 +187,8 @@ with tab2:
                 smiles_column = st.selectbox("未自动识别到 SMILES 列，请手动选择", df.columns)
             
             if smiles_column:
-                # 创建两列布局用于显示图片
-                col1, col2 = st.columns(2)
+                # 创建表格数据
+                table_data = []
                 
                 # 处理每个SMILES
                 success_count = 0
@@ -208,32 +208,15 @@ with tab2:
                             img.save(img_byte_arr, format='PNG')
                             img_byte_arr = img_byte_arr.getvalue()
                             
-                            # 创建其他列的数据显示
-                            other_data = {col: row[col] for col in df.columns if col != smiles_column}
-                            data_text = "\n".join([f"{k}: {v}" for k, v in other_data.items()])
+                            # 创建表格行数据
+                            row_data = {}
+                            for col in df.columns:
+                                if col == smiles_column:
+                                    row_data['结构式'] = img_byte_arr
+                                else:
+                                    row_data[col] = row[col]
                             
-                            # 在对应的列中显示图片
-                            if idx % 2 == 0:
-                                with col1:
-                                    st.image(img_byte_arr, caption=f"SMILES: {smiles}\n{data_text}", use_container_width=True)
-                                    st.download_button(
-                                        label=f"下载结构 {idx+1}",
-                                        data=img_byte_arr,
-                                        file_name=f"molecule_{idx+1}.png",
-                                        mime="image/png",
-                                        key=f"download_{idx}"
-                                    )
-                            else:
-                                with col2:
-                                    st.image(img_byte_arr, caption=f"SMILES: {smiles}\n{data_text}", use_container_width=True)
-                                    st.download_button(
-                                        label=f"下载结构 {idx+1}",
-                                        data=img_byte_arr,
-                                        file_name=f"molecule_{idx+1}.png",
-                                        mime="image/png",
-                                        key=f"download_{idx}"
-                                    )
-                            
+                            table_data.append(row_data)
                             success_count += 1
                         else:
                             error_count += 1
@@ -251,6 +234,27 @@ with tab2:
                         st.write("以下 SMILES 处理失败：")
                         for smiles in error_smiles:
                             st.code(smiles)
+                
+                # 使用表格显示数据
+                if table_data:
+                    st.subheader("结构式预览")
+                    for row in table_data:
+                        # 创建列布局
+                        cols = st.columns([1] + [2] * (len(row) - 1))
+                        
+                        # 显示结构式图片
+                        with cols[0]:
+                            st.image(row['结构式'], use_container_width=True)
+                        
+                        # 显示其他数据
+                        for i, (key, value) in enumerate(row.items()):
+                            if key != '结构式':
+                                with cols[i]:
+                                    st.write(f"**{key}:**")
+                                    st.write(value)
+                        
+                        # 添加分隔线
+                        st.markdown("---")
                 
                 # 添加导出到Excel的功能
                 if st.button("导出到Excel"):
