@@ -4,6 +4,7 @@ import sys
 import pandas as pd
 import os
 import base64
+import re
 
 # 检查是否已安装rdkit
 try:
@@ -25,6 +26,25 @@ except ImportError:
 from PIL import Image
 import io
 import zipfile
+
+def is_valid_smiles(smiles):
+    """检查字符串是否为有效的SMILES"""
+    try:
+        mol = Chem.MolFromSmiles(str(smiles))
+        return mol is not None
+    except:
+        return False
+
+def find_smiles_column(df):
+    """自动识别包含SMILES的列"""
+    for column in df.columns:
+        # 检查列名是否包含smiles（不区分大小写）
+        if 'smiles' in column.lower():
+            # 验证该列是否包含有效的SMILES
+            valid_count = sum(1 for x in df[column] if is_valid_smiles(x))
+            if valid_count > len(df) * 0.5:  # 如果超过50%的值是有效的SMILES
+                return column
+    return None
 
 st.set_page_config(page_title="SMILES 结构查看器", layout="wide")
 
@@ -86,7 +106,7 @@ with tab2:
     st.markdown("""
     ### 批量转换说明
     1. 上传包含 SMILES 列的 CSV 文件
-    2. 选择包含 SMILES 的列名
+    2. 系统会自动识别包含 SMILES 的列
     3. 系统会自动生成并显示所有结构的图片
     4. 可以下载单个结构图片
     """)
@@ -98,8 +118,17 @@ with tab2:
             # 读取CSV文件
             df = pd.read_csv(uploaded_file)
             
-            # 显示列名选择器
-            smiles_column = st.selectbox("选择包含 SMILES 的列", df.columns)
+            # 显示数据预览
+            st.subheader("数据预览")
+            st.dataframe(df.head())
+            
+            # 自动识别SMILES列
+            smiles_column = find_smiles_column(df)
+            
+            if smiles_column:
+                st.success(f"自动识别到 SMILES 列: {smiles_column}")
+            else:
+                smiles_column = st.selectbox("未自动识别到 SMILES 列，请手动选择", df.columns)
             
             if smiles_column:
                 # 创建两列布局用于显示图片
@@ -123,10 +152,14 @@ with tab2:
                             img.save(img_byte_arr, format='PNG')
                             img_byte_arr = img_byte_arr.getvalue()
                             
+                            # 创建其他列的数据显示
+                            other_data = {col: row[col] for col in df.columns if col != smiles_column}
+                            data_text = "\n".join([f"{k}: {v}" for k, v in other_data.items()])
+                            
                             # 在对应的列中显示图片
                             if idx % 2 == 0:
                                 with col1:
-                                    st.image(img_byte_arr, caption=f"SMILES: {smiles}", use_container_width=True)
+                                    st.image(img_byte_arr, caption=f"SMILES: {smiles}\n{data_text}", use_container_width=True)
                                     st.download_button(
                                         label=f"下载结构 {idx+1}",
                                         data=img_byte_arr,
@@ -136,7 +169,7 @@ with tab2:
                                     )
                             else:
                                 with col2:
-                                    st.image(img_byte_arr, caption=f"SMILES: {smiles}", use_container_width=True)
+                                    st.image(img_byte_arr, caption=f"SMILES: {smiles}\n{data_text}", use_container_width=True)
                                     st.download_button(
                                         label=f"下载结构 {idx+1}",
                                         data=img_byte_arr,
